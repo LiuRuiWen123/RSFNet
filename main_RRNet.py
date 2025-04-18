@@ -126,4 +126,4 @@ def main():
 if __name__=='__main__':
     main()
 else:
-    print(f"这是worker进程（模块名: {__name__}）")
+    print(f"建立了一个worker进程（模块名: {__name__}）")
