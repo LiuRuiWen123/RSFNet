@@ -20,7 +20,9 @@ class lolv1(Dataset):
             self.p_inDir     = config.p_trainDir
             self.p_gtDir     = config.p_trainGtDir
             self.p_resDir    = os.path.join(config.p_resDir,'train')
-            self.augment     = transforms.Compose([transforms.ToTensor()])
+
+            # 对数据集的预处理
+            self.augment     = transforms.Compose([transforms.ToTensor()]) # ToTensor() 包含归一化->[0,1]
             # self.augment     = transforms.Compose([transforms.Resize(size=(config.imsize,config.imsize)), transforms.ToTensor()])
         elif mode=='val':
             if not config.p_valList==None:
@@ -49,6 +51,11 @@ class lolv1(Dataset):
         return len(self.imList)
     
     def __getitem__(self,idx):
+        """
+        Args:idx:图像列表imList的索引
+        Returns:字典{图像序号，图像数据，图像标签},{'imNum':imNum, 'gtdata':gtdata, 'imlow':imlow}
+        """
+
         imNum,_ = os.path.splitext(self.imList[idx])
         p_low   = os.path.join(self.p_inDir, imNum+'.png')
         imlow   = Image.open(p_low)

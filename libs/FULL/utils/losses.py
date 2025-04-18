@@ -22,6 +22,8 @@ class BurstLoss(_Loss):
         # use_cuda = torch.cuda.is_available()
         if not rank==None: device = torch.device("cuda:"+str(rank))
         else: device = torch.device("cuda")
+
+        # 定义了两个卷积操作（权重已配置）
         prewitt_filter = 1 / 6 * np.array([[1, 0, -1],
                                            [1, 0, -1],
                                            [1, 0, -1]])
@@ -52,8 +54,13 @@ class BurstLoss(_Loss):
         return grad
 
     def forward(self, input, target):
+        """
+        Args:input: (N, C, H, W)，RGB target: (N, C, H, W)，RGB
+        """
         input_grad  = self.get_gradients(input)
         target_grad = self.get_gradients(target)
+
+        # 尝试各个损失的不同加权和
         # return F.l1_loss(input, target, reduction=self.reduction) + 0.0*F.l1_loss(input_grad, target_grad, reduction=self.reduction)
         # return F.l1_loss(input, target, reduction=self.reduction) + 10*F.l1_loss(input_grad, target_grad, reduction=self.reduction)
         return F.l1_loss(input, target, reduction=self.reduction) + 5.0*F.l1_loss(input_grad, target_grad, reduction=self.reduction)
@@ -69,6 +76,9 @@ class PerceptualLoss(torch.nn.Module):
             param.requires_grad = False
 
     def forward(self, x, y):
+        """
+        Args:x: (N, C, H, W) y: (N, C, H, W)
+        """
         x_vgg = self.vgg(x)
         y_vgg = self.vgg(y)
         loss = F.mse_loss(x_vgg, y_vgg)
@@ -76,13 +86,20 @@ class PerceptualLoss(torch.nn.Module):
 
 
 class L_color(nn.Module):
+    """
+    模型使用，计算增强后的图像的色彩失真
+    """
     def __init__(self):
         super(L_color, self).__init__()
 
     def forward(self, x ):
+        """
+        Args:x: (B, 3, H, W), RGB
+        Returns:k: (B, 1, 1, 1),这批图像的损失值
+        """
         b,c,h,w = x.shape
-        mean_rgb = torch.mean(x,[2,3],keepdim=True)
-        mr,mg, mb = torch.split(mean_rgb, 1, dim=1)
+        mean_rgb = torch.mean(x,[2,3],keepdim=True) # [B,3,1,1]
+        mr,mg, mb = torch.split(mean_rgb, 1, dim=1) # [B,1,1,1]
         Drg = torch.pow(mr-mg,2)
         Drb = torch.pow(mr-mb,2)
         Dgb = torch.pow(mb-mg,2)
@@ -92,6 +109,9 @@ class L_color(nn.Module):
 
 
 class L_colorYCbCr(nn.Module):
+    """
+    YCbCr color space图像
+    """
     def __init__(self):
         super(L_colorYCbCr, self).__init__()
         
@@ -114,11 +134,20 @@ class L_color_with_gt(nn.Module):
         super(L_color_with_gt, self).__init__()
 
     def forward(self, x, gt ):
+        """
+        Args:x, gt: (N, C, H, W), RGB
+
+        """
         b,c,h,w = x.shape
         mean_rgb = torch.mean(x,[2,3],keepdim=True)
         mr,mg, mb = torch.split(mean_rgb, 1, dim=1)
-        mean_rgb_gt = torch.mean(x,[2,3],keepdim=True)
-        mr_gt,mg_gt, mb_gt = torch.split(mean_rgb_gt, 1, dim=1)
+
+        # mean_rgb_gt = torch.mean(x,[2,3],keepdim=True)
+        # mr_gt,mg_gt, mb_gt = torch.split(mean_rgb_gt, 1, dim=1)
+        # 修改为：
+        mean_rgb_gt = torch.mean(gt, [2, 3], keepdim=True)
+        mr_gt, mg_gt, mb_gt = torch.split(mean_rgb_gt, 1, dim=1)
+
         Drg = torch.pow(mr-mr_gt,2)
         Drb = torch.pow(mr-mb_gt,2)
         Dgb = torch.pow(mb-mb_gt,2)
@@ -152,14 +181,19 @@ class L_spa(nn.Module):
             self.device = torch.device("cuda:"+str(rank))
         else:
             self.device = torch.device("cuda")
+
+        # 定义四个方向的梯度卷积核（不可训练）
         kernel_left = torch.FloatTensor( [[0,0,0],[-1,1,0],[0,0,0]]).to(self.device).type(torch.float32).unsqueeze(0).unsqueeze(0)
         kernel_right = torch.FloatTensor( [[0,0,0],[0,1,-1],[0,0,0]]).to(self.device).type(torch.float32).unsqueeze(0).unsqueeze(0)
         kernel_up = torch.FloatTensor( [[0,-1,0],[0,1, 0 ],[0,0,0]]).to(self.device).type(torch.float32).unsqueeze(0).unsqueeze(0)
         kernel_down = torch.FloatTensor( [[0,0,0],[0,1, 0],[0,-1,0]]).to(self.device).type(torch.float32).unsqueeze(0).unsqueeze(0)
+
+        # 注册为不可训练参数
         self.weight_left = nn.Parameter(data=kernel_left, requires_grad=False)
         self.weight_right = nn.Parameter(data=kernel_right, requires_grad=False)
         self.weight_up = nn.Parameter(data=kernel_up, requires_grad=False)
         self.weight_down = nn.Parameter(data=kernel_down, requires_grad=False)
+
         self.pool = nn.AvgPool2d(4)
         
     def forward(self, org , enhance ):
@@ -171,6 +205,8 @@ class L_spa(nn.Module):
         enhance_pool = self.pool(enhance_mean)	
         weight_diff =torch.max(torch.FloatTensor([1]).to(self.device).type(torch.float32) + 10000*torch.min(org_pool - torch.FloatTensor([0.3]).to(self.device).type(torch.float32), torch.FloatTensor([0]).to(self.device).type(torch.float32)),torch.FloatTensor([0.5]).to(self.device).type(torch.float32))
         E_1 = torch.mul(torch.sign(enhance_pool - torch.FloatTensor([0.5]).to(self.device).type(torch.float32)) ,enhance_pool-org_pool)
+
+        #四个方向的梯度
         D_org_left = F.conv2d(org_pool , self.weight_left, padding=1)
         D_org_right = F.conv2d(org_pool , self.weight_right, padding=1)
         D_org_up = F.conv2d(org_pool , self.weight_up, padding=1)
@@ -179,6 +215,7 @@ class L_spa(nn.Module):
         D_enhance_right = F.conv2d(enhance_pool , self.weight_right, padding=1)
         D_enhance_up = F.conv2d(enhance_pool , self.weight_up, padding=1)
         D_enhance_down = F.conv2d(enhance_pool , self.weight_down, padding=1)
+
         D_left = torch.pow(D_org_left - D_enhance_left,2)
         D_right = torch.pow(D_org_right - D_enhance_right,2)
         D_up = torch.pow(D_org_up - D_enhance_up,2)
@@ -366,6 +403,10 @@ class L_expYCbCr(nn.Module):
         return d
 
 class L_exp(nn.Module):
+    """
+    模型使用的瀑光损失
+    """
+
     def __init__(self,patch_size,mean_val):
         super(L_exp, self).__init__()
         # print(1)
@@ -373,9 +414,13 @@ class L_exp(nn.Module):
         self.mean_val = mean_val
 
     def forward(self, x ):
+        """
+        Args:x:增强后的这批图像，[B,C,H,W]
+        """
+
         b,c,h,w = x.shape
         # x = ycbcr_to_rgb(x)
-        x = torch.mean(x,1,keepdim=True)
+        x = torch.mean(x,1,keepdim=True) # [B,1,H,W],代表亮度通道
         mean = self.pool(x)
         # d = torch.mean(torch.pow(mean- torch.FloatTensor([self.mean_val] ).cuda(),2))
         d = torch.mean(torch.pow(mean- torch.FloatTensor([self.mean_val] ).to(x.device),2))
@@ -383,6 +428,9 @@ class L_exp(nn.Module):
 
 
 class L_TV1(nn.Module):
+    """
+    Total variation loss，相邻像素差值
+    """
     def __init__(self,TVLoss_weight=1):
         super(L_TV1,self).__init__()
         self.TVLoss_weight = TVLoss_weight
@@ -398,11 +446,19 @@ class L_TV1(nn.Module):
         return self.TVLoss_weight*2*(h_tv+w_tv)/batch_size
 
 class L_TV(nn.Module):
+    """
+    模型使用的总变分损失（平滑损失）
+    """
+
     def __init__(self,TVLoss_weight=1):
         super(L_TV,self).__init__()
         self.TVLoss_weight = TVLoss_weight
 
     def forward(self,x):
+        """
+        Args:x:增强后的这批图像，[B,C,H,W]
+        """
+
         batch_size = x.size()[0]
         h_x = x.size()[2]
         w_x = x.size()[3]
@@ -563,6 +619,7 @@ class SmoothLoss(nn.Module):
         w6 = torch.exp(torch.sum(torch.pow(self.input[:, :, 1:, 1:] - self.input[:, :, :-1, :-1], 2), dim=1, keepdim=True) * sigma_color)
         w7 = torch.exp(torch.sum(torch.pow(self.input[:, :, 1:, :-1] - self.input[:, :, :-1, 1:], 2), dim=1, keepdim=True) * sigma_color)
         w8 = torch.exp(torch.sum(torch.pow(self.input[:, :, :-1, 1:] - self.input[:, :, 1:, :-1], 2), dim=1, keepdim=True) * sigma_color)
+
         w9 = torch.exp(torch.sum(torch.pow(self.input[:, :, 2:, :] - self.input[:, :, :-2, :], 2), dim=1, keepdim=True) * sigma_color)
         w10 = torch.exp(torch.sum(torch.pow(self.input[:, :, :-2, :] - self.input[:, :, 2:, :], 2), dim=1, keepdim=True) * sigma_color)
         w11 = torch.exp(torch.sum(torch.pow(self.input[:, :, :, 2:] - self.input[:, :, :, :-2], 2), dim=1, keepdim=True) * sigma_color)

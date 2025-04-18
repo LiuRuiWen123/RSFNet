@@ -103,8 +103,8 @@ def calculate_ssim(img1, img2):
             return ssim(np.squeeze(img1), np.squeeze(img2))
     else:
         raise ValueError('Wrong input image dimensions.')
-    
-    
+
+
 def bgr2ycbcr(img, only_y=True):
     '''same as matlab rgb2ycbcr
     only_y: only return Y channel

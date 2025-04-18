@@ -27,10 +27,10 @@ def test(config):
     device      = torch.device("cuda") if (config.device=='cuda' and torch.cuda.is_available()) else torch.device("cpu")
     config.device = device
     print(f'WORKING ON Device={device}')
-    
+
     dataset_test    = MyDataset(config, 'test')
     loader_test     = DataLoader(dataset_test, num_workers=config.num_workers, batch_size=config.batch_size)
-    
+
     model = RRNet(config)
     print('Loading model from ', config.p_model)
     # model = torch.nn.DataParallel(model, device_ids=[int(t) for t in config.gpuId.split(",")])
@@ -57,10 +57,10 @@ def test(config):
             model.to(device)
             pred,_       = model(imlow, imNum=imNum)
             if config.f_OverExp: pred = 1-pred
-            
+
             # if config.f_denoise: pred = bilateral_blur(pred,(5,5), 0.4, (1.0,1.0))
             # if config.f_denoise: pred = bilateral_blur(pred,(5,5), 0.4, (1.0,1.0))
-            
+
             lpips_lis_C.append(loss_fn_vgg(y_labels,pred).item())
             im          = torch.permute(pred[0].detach().cpu(),(1,2,0)).numpy()
             if config.f_saveRes:
@@ -73,15 +73,15 @@ def test(config):
                 ssim_lis_C.append(ssim(Igt, im, data_range=1.0, channel_axis=-1))
                 # ssim_lis_C.append(ssim(Igt, im, data_range=1.0, multichannel=True))
                 psnr_lis_C.append(psnr(Igt, im, data_range=1.0))
-                
+
                 #rgb->bgr
                 im_t     = np.zeros_like(im)
                 Igt_t    = np.zeros_like(Igt)
-                im_t[:,:,0]     = im[:,:,2] 
+                im_t[:,:,0]     = im[:,:,2]
                 Igt_t[:,:,0]    = Igt[:,:, 2]
-                im_t[:,:,1]     = im[:,:, 1] 
+                im_t[:,:,1]     = im[:,:, 1]
                 Igt_t[:,:,1]    = Igt[:,:, 1]
-                im_t[:,:,2]     = im[:,:, 0] 
+                im_t[:,:,2]     = im[:,:, 0]
                 Igt_t[:,:,2]    = Igt[:,:, 0]
                 im      = bgr2ycbcr(np.uint8(im_t*255))  # returns Y only
                 Igt     = bgr2ycbcr(np.uint8(Igt_t*255)) # returns Y only

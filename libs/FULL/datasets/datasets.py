@@ -5,6 +5,12 @@ from libs.FULL.datasets.lolve import lolve
 from libs.FULL.datasets.misc import misc
 
 def MyDataset(config, mode):
+    """
+    根据配置文件config和mode返回训练集trainset，验证集valset或者测试集testset
+    Args:config:配置文件，mode:train/test
+    Returns:trainset:训练集->Dataset,valset或者testset
+    """
+
     if config.dataset.lower()=='lolv1':
         if mode=='train':
             trainset = lolv1(config,'train')
